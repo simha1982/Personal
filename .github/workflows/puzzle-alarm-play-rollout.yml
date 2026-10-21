@@ -4,9 +4,6 @@ name: Puzzle Alarm internal rollout
 # PLAY_SERVICE_ACCOUNT_JSON secret. The release workflow only uploads drafts.
 
 on:
-  push:
-    paths:
-      - .github/workflows/puzzle-alarm-play-rollout.yml
   workflow_dispatch:
 
 permissions:
