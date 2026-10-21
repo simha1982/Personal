@@ -12,12 +12,28 @@ android {
         applicationId = "com.simha.puzzlealarm"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
+        // CI passes the run number so every uploaded build gets a higher version code.
+        versionCode = (System.getenv("VERSION_CODE") ?: "1").toInt()
         versionName = "1.0"
+    }
+
+    signingConfigs {
+        // Release signing comes from environment variables (repo secrets in CI); without them the
+        // release build is left unsigned.
+        val keystore = System.getenv("UPLOAD_KEYSTORE_PATH")
+        if (keystore != null) {
+            create("upload") {
+                storeFile = file(keystore)
+                storePassword = System.getenv("UPLOAD_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("UPLOAD_KEY_ALIAS")
+                keyPassword = System.getenv("UPLOAD_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
+            signingConfigs.findByName("upload")?.let { signingConfig = it }
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
