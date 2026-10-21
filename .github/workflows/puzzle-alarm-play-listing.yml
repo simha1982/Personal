@@ -5,6 +5,13 @@ name: Puzzle Alarm Play listing graphics
 # emulator test's artifact, trimmed of system bars and padded to Play's 9:16 size.
 
 on:
+  # Also runs when the graphics or this workflow change, since a manual run needs the file on the
+  # default branch first.
+  push:
+    paths:
+      - PuzzleAlarm/play/graphics/**
+      - .github/workflows/puzzle-alarm-play-listing.yml
+      - .github/scripts/play_listing_graphics.py
   workflow_dispatch:
     inputs:
       emulator_run_id:
