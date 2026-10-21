@@ -308,7 +308,14 @@ def main():
         tap(r"Ring a test alarm now")
         time.sleep(3)
         tap(r"I'm awake")
-        record("Ringing alarm shows an AI puzzle", find(r"^AI puzzle\|", timeout=40) is not None)
+        ai = find(r"^AI puzzle\|", timeout=40)
+        if ai is None and find(r"^Offline puzzle\|", timeout=1):
+            # The provider took longer than the app's 30 s limit, so it fell back as designed; ask once more.
+            print("Provider slow; fell back to an offline puzzle. Asking for a different puzzle.", flush=True)
+            sh("input keyevent KEYCODE_BACK")  # hide keyboard; Back can't dismiss the alarm
+            tap(r"Give me a different puzzle")
+            ai = find(r"^AI puzzle\|", timeout=40)
+        record("Ringing alarm shows an AI puzzle", ai is not None)
         shot("11-ringing-ai-puzzle")
     else:
         print("No API key secret set: skipping the AI puzzle checks", flush=True)
