@@ -38,7 +38,8 @@ jobs:
           KEYSTORE_B64: ${{ secrets.UPLOAD_KEYSTORE_BASE64 }}
         run: |
           if [ -n "$KEYSTORE_B64" ]; then
-            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+            # Secrets piped in from Windows PowerShell can carry CR/LF; keep only base64 characters.
+            printf %s "$KEYSTORE_B64" | tr -cd 'A-Za-z0-9+/=' | base64 -d > "$RUNNER_TEMP/upload.jks"
             echo "UPLOAD_KEYSTORE_PATH=$RUNNER_TEMP/upload.jks" >> "$GITHUB_ENV"
           else
             echo "::warning::No UPLOAD_KEYSTORE_BASE64 secret; building an unsigned bundle"
@@ -50,7 +51,13 @@ jobs:
           UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.UPLOAD_KEYSTORE_PASSWORD }}
           UPLOAD_KEY_ALIAS: ${{ secrets.UPLOAD_KEY_ALIAS }}
           UPLOAD_KEY_PASSWORD: ${{ secrets.UPLOAD_KEY_PASSWORD }}
-        run: ./gradlew --no-daemon bundleRelease assembleRelease
+        run: |
+          # Drop stray CR/LF or a UTF-8 BOM that Windows tools may add when setting secrets.
+          clean() { printf %s "$1" | sed 's/^\xEF\xBB\xBF//' | tr -d '\r\n'; }
+          export UPLOAD_KEYSTORE_PASSWORD="$(clean "$UPLOAD_KEYSTORE_PASSWORD")"
+          export UPLOAD_KEY_ALIAS="$(clean "$UPLOAD_KEY_ALIAS")"
+          export UPLOAD_KEY_PASSWORD="$(clean "$UPLOAD_KEY_PASSWORD")"
+          ./gradlew --no-daemon bundleRelease assembleRelease
       - uses: actions/upload-artifact@v4
         with:
           name: PuzzleAlarm-release
