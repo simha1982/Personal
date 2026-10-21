@@ -8,6 +8,10 @@ name: Puzzle Alarm release
 #     Upload key for signing. Without them the bundle is built unsigned (Play rejects unsigned bundles).
 #   PLAY_SERVICE_ACCOUNT_JSON
 #     Service account with release access in Play Console. Without it the upload step is skipped.
+#   APK_REPO_TOKEN
+#     Fine-grained token with "Contents: read and write" on the public download repo
+#     (repo variable APK_REPO, default simha1982/puzzle-alarm-apk). With it and the upload key,
+#     the signed APK is published there as a GitHub release anyone can download.
 
 on:
   workflow_dispatch:
@@ -67,3 +71,27 @@ jobs:
           releaseFiles: PuzzleAlarm/app/build/outputs/bundle/release/app-release.aab
           track: internal
           status: draft
+      - name: Check for public APK repo access
+        id: apk
+        env:
+          APK_TOKEN: ${{ secrets.APK_REPO_TOKEN }}
+        run: echo "enabled=$([ -n "$APK_TOKEN" ] && [ -n "$UPLOAD_KEYSTORE_PATH" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+      - name: Name the APK
+        if: steps.apk.outputs.enabled == 'true' && github.event_name != 'pull_request'
+        run: cp PuzzleAlarm/app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/PuzzleAlarm.apk"
+      - name: Publish APK to the public download repo
+        if: steps.apk.outputs.enabled == 'true' && github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          repository: ${{ vars.APK_REPO || 'simha1982/puzzle-alarm-apk' }}
+          token: ${{ secrets.APK_REPO_TOKEN }}
+          tag_name: v1.0.${{ github.run_number }}
+          name: Puzzle Alarm 1.0 (build ${{ github.run_number }})
+          make_latest: "true"
+          files: ${{ runner.temp }}/PuzzleAlarm.apk
+          body: |
+            Download **PuzzleAlarm.apk** below and open it on your Android phone (Android 8.0 or newer).
+            Allow "Install unknown apps" for your browser or file manager when asked.
+
+            The newest version is always at
+            https://github.com/${{ vars.APK_REPO || 'simha1982/puzzle-alarm-apk' }}/releases/latest/download/PuzzleAlarm.apk
