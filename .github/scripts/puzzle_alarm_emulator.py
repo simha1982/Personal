@@ -90,10 +90,16 @@ def screen_height():
 
 def tap(pattern, timeout=10):
     n = find(pattern, timeout)
+    h = screen_height()
+    for _ in range(6):  # not laid out yet: scroll down and look again
+        if n is not None:
+            break
+        sh(f"input swipe 500 {int(h * 0.75)} 500 {int(h * 0.3)} 300")
+        time.sleep(1)
+        n = find(pattern, 2)
     if n is None:
         raise RuntimeError(f"Nothing on screen matches {pattern!r}")
     x, y = center(n)
-    h = screen_height()
     tries = 0
     while y > h - 150 and tries < 4:  # off the bottom: scroll it into view
         sh(f"input swipe 500 {int(h * 0.75)} 500 {int(h * 0.3)} 300")
