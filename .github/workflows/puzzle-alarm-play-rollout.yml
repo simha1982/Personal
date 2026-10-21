@@ -1,0 +1,25 @@
+name: Puzzle Alarm internal rollout
+
+# Rolls out the newest draft on the Play internal testing track to its testers, using the
+# PLAY_SERVICE_ACCOUNT_JSON secret. The release workflow only uploads drafts.
+
+on:
+  push:
+    paths:
+      - .github/workflows/puzzle-alarm-play-rollout.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rollout:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Roll out internal testing release
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          pip install --quiet google-api-python-client google-auth
+          python3 .github/scripts/play_release_internal.py com.ishtah.puzzlealarm
