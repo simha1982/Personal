@@ -41,10 +41,12 @@ if a.feature:
 if a.screenshots:
     replace("phoneScreenshots", sorted(a.screenshots))
 
+# Keep the change as a pending Console change instead of sending it for review: sending for review
+# needs release permissions this account may not have, and Play refuses the commit with a 403.
 try:
-    edits.commit(packageName=pkg, editId=edit).execute()
+    edits.commit(packageName=pkg, editId=edit, changesNotSentForReview=True).execute()
 except HttpError as e:
     if "changesNotSentForReview" not in str(e):
         raise
-    edits.commit(packageName=pkg, editId=edit, changesNotSentForReview=True).execute()
+    edits.commit(packageName=pkg, editId=edit).execute()
 print("Committed listing graphics.")
