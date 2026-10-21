@@ -1,0 +1,66 @@
+name: Puzzle Alarm Play listing graphics
+
+# Uploads the store icon, feature graphic and phone screenshots to the Play listing through the
+# Play Developer API, using the PLAY_SERVICE_ACCOUNT_JSON secret. Screenshots come from the
+# emulator test's artifact, trimmed of system bars and padded to Play's 9:16 size.
+
+on:
+  workflow_dispatch:
+    inputs:
+      emulator_run_id:
+        description: "Emulator test run to take screenshots from (empty = latest successful run)"
+        required: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download emulator screenshots
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ inputs.emulator_run_id }}
+        run: |
+          if [ -z "$RUN_ID" ]; then
+            RUN_ID=$(gh run list -R "$GITHUB_REPOSITORY" --workflow puzzle-alarm-emulator.yml \
+              --status success --limit 1 --json databaseId -q '.[0].databaseId')
+          fi
+          echo "Using emulator run $RUN_ID"
+          gh run download "$RUN_ID" -R "$GITHUB_REPOSITORY" -n PuzzleAlarm-emulator-screenshots -D shots
+          ls -l shots
+
+      - name: Make 9:16 phone screenshots
+        run: |
+          mkdir -p phone
+          i=1
+          for s in 03-alarm-list 02-new-alarm 05-ringing-first 07-puzzle 11-ringing-ai-puzzle 10-settings-ai-puzzle; do
+            [ -f "shots/$s.png" ] || { echo "missing $s"; continue; }
+            w=$(identify -format %w "shots/$s.png"); h=$(identify -format %h "shots/$s.png")
+            top=$((h * 4 / 100)); bottom=$((h * 6 / 100))   # status bar and navigation bar
+            bg=$(convert "shots/$s.png" -format '%[pixel:p{4,'"$((h / 3))"'}]' info:)
+            convert "shots/$s.png" -crop "${w}x$((h - top - bottom))+0+${top}" +repage \
+              -resize 1080x1920 -background "$bg" -gravity center -extent 1080x1920 \
+              "phone/$(printf %02d $i)-$s.png"
+            i=$((i + 1))
+          done
+          identify phone/*.png
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PuzzleAlarm-play-screenshots
+          path: phone/
+
+      - name: Upload graphics to Play
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          pip install --quiet google-api-python-client google-auth
+          python3 .github/scripts/play_listing_graphics.py com.ishtah.puzzlealarm \
+            --icon PuzzleAlarm/play/graphics/icon-512.png \
+            --feature PuzzleAlarm/play/graphics/feature-1024x500.png \
+            --screenshots phone/*.png
