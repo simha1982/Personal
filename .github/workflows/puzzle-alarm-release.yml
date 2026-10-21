@@ -88,6 +88,7 @@ jobs:
         run: cp PuzzleAlarm/app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/PuzzleAlarm.apk"
       - name: Publish APK to the public download repo
         if: steps.apk.outputs.enabled == 'true' && github.event_name != 'pull_request'
+        continue-on-error: true  # the Play upload above has already happened; don't fail the release over the mirror
         uses: softprops/action-gh-release@v2
         with:
           repository: ${{ vars.APK_REPO || 'simha1982/puzzle-alarm-apk' }}
