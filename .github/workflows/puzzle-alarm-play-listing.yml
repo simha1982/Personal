@@ -43,19 +43,29 @@ jobs:
 
       - name: Make 9:16 phone screenshots
         run: |
-          mkdir -p phone
-          i=1
-          for s in 03-alarm-list 02-new-alarm 05-ringing-first 07-puzzle 11-ringing-ai-puzzle 10-settings-ai-puzzle; do
-            [ -f "shots/$s.png" ] || { echo "missing $s"; continue; }
-            w=$(identify -format %w "shots/$s.png"); h=$(identify -format %h "shots/$s.png")
-            top=$((h * 4 / 100)); bottom=$((h * 6 / 100))   # status bar and navigation bar
-            bg=$(convert "shots/$s.png" -format '%[pixel:p{4,'"$((h / 3))"'}]' info:)
-            convert "shots/$s.png" -crop "${w}x$((h - top - bottom))+0+${top}" +repage \
-              -resize 1080x1920 -background "$bg" -gravity center -extent 1080x1920 \
-              "phone/$(printf %02d $i)-$s.png"
-            i=$((i + 1))
-          done
-          identify phone/*.png
+          pip install --quiet pillow
+          python3 - <<'PY'
+          import os
+          from PIL import Image
+          os.makedirs("phone", exist_ok=True)
+          names = ["03-alarm-list", "02-new-alarm", "05-ringing-first", "07-puzzle",
+                   "11-ringing-ai-puzzle", "10-settings-ai-puzzle"]
+          for i, n in enumerate(names, 1):
+              src = f"shots/{n}.png"
+              if not os.path.exists(src):
+                  print("missing", n)
+                  continue
+              im = Image.open(src).convert("RGB")
+              w, h = im.size
+              im = im.crop((0, h * 4 // 100, w, h - h * 6 // 100))  # drop status and navigation bars
+              bg = im.getpixel((4, im.height // 3))
+              scale = min(1080 / im.width, 1920 / im.height)
+              im = im.resize((round(im.width * scale), round(im.height * scale)), Image.LANCZOS)
+              out = Image.new("RGB", (1080, 1920), bg)
+              out.paste(im, ((1080 - im.width) // 2, (1920 - im.height) // 2))
+              out.save(f"phone/{i:02d}-{n}.png")
+              print("made", n)
+          PY
 
       - uses: actions/upload-artifact@v4
         with:
