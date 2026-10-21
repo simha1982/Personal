@@ -16,7 +16,7 @@ p.add_argument("--screenshots", nargs="*", default=[])
 a = p.parse_args()
 
 creds = service_account.Credentials.from_service_account_info(
-    json.loads(os.environ["PLAY_SERVICE_ACCOUNT_JSON"]),
+    json.loads(os.environ["PLAY_SERVICE_ACCOUNT_JSON"].lstrip("\ufeff")),  # Windows tools may add a BOM
     scopes=["https://www.googleapis.com/auth/androidpublisher"],
 )
 edits = build("androidpublisher", "v3", credentials=creds, cache_discovery=False).edits()
