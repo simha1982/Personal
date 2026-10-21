@@ -9,7 +9,7 @@ import sys
 import time
 import xml.etree.ElementTree as ET
 
-PKG = "com.simha.puzzlealarm"
+PKG = "com.ishtah.puzzlealarm"
 APK = "PuzzleAlarm/app/build/outputs/apk/debug/app-debug.apk"
 SHOTS = "shots"
 results = []
@@ -235,7 +235,7 @@ def main():
     tap(r"Snooze 5 min")
     time.sleep(2)
     record("Snooze stops the ringing", not service_running())
-    alarms = sh("dumpsys alarm | grep -A3 com.simha.puzzlealarm", check=False)
+    alarms = sh("dumpsys alarm | grep -A3 com.ishtah.puzzlealarm", check=False)
     record("Snooze alarm scheduled", "AlarmReceiver" in alarms or "puzzlealarm" in alarms)
 
     # 6. Snoozed ring: no snooze this time

@@ -38,7 +38,7 @@
             android:exported="false"
             android:launchMode="singleInstance"
             android:showWhenLocked="true"
-            android:taskAffinity="com.simha.puzzlealarm.ringing"
+            android:taskAffinity="com.ishtah.puzzlealarm.ringing"
             android:turnScreenOn="true" />
 
         <service

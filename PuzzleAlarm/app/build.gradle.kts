@@ -5,13 +5,13 @@ plugins {
 }
 
 android {
-    namespace = "com.simha.puzzlealarm"
-    compileSdk = 35
+    namespace = "com.ishtah.puzzlealarm"
+    compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.simha.puzzlealarm"
+        applicationId = "com.ishtah.puzzlealarm"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         // CI passes the run number so every uploaded build gets a higher version code.
         versionCode = (System.getenv("VERSION_CODE") ?: "1").toInt()
         versionName = "1.0"
