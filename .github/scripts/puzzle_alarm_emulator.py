@@ -1,17 +1,13 @@
 """Drives Puzzle Alarm on an emulator through adb: add an alarm, ring it with the screen off,
-snooze once, ring again, solve the puzzle. Screenshots go to ./shots and are also printed to the
-log as small base64 JPEGs between SHOT-BEGIN/SHOT-END markers."""
+snooze once, ring again, solve the puzzle. Screenshots go to ./shots (uploaded as an artifact)
+and the visible text of each screen is printed to the log."""
 
-import base64
-import io
 import os
 import re
 import subprocess
 import sys
 import time
 import xml.etree.ElementTree as ET
-
-from PIL import Image
 
 PKG = "com.simha.puzzlealarm"
 APK = "PuzzleAlarm/app/build/outputs/apk/debug/app-debug.apk"
@@ -40,15 +36,17 @@ def shot(name):
     os.makedirs(SHOTS, exist_ok=True)
     with open(f"{SHOTS}/{name}.png", "wb") as f:
         f.write(png)
-    img = Image.open(io.BytesIO(png)).convert("RGB")
-    img.thumbnail((360, 800))
-    buf = io.BytesIO()
-    img.save(buf, "JPEG", quality=55)
-    b64 = base64.b64encode(buf.getvalue()).decode()
-    print(f"SHOT-BEGIN {name}")
-    for i in range(0, len(b64), 900):
-        print(b64[i:i + 900])
-    print(f"SHOT-END {name}", flush=True)
+    describe(name)
+
+
+def describe(tag):
+    """Log what's on screen as text: the resumed activity and every visible label."""
+    top = sh("dumpsys activity activities | grep -m1 topResumedActivity", check=False).strip()
+    try:
+        texts = [t for t in (label(n).split("|")[0] or label(n).split("|")[1] for n in nodes()) if t]
+    except RuntimeError as e:
+        texts = [str(e)]
+    print(f"SCREEN {tag}: {top}\n    " + " / ".join(texts)[:1500], flush=True)
 
 
 def nodes():
@@ -111,6 +109,22 @@ def type_text(text):
     sh("input text " + text.replace(" ", "%s"))
 
 
+def clear_system_dialogs():
+    """CI emulators sometimes show "System UI isn't responding" and similar; get them out of the way."""
+    for _ in range(3):
+        n = find(r"isn't responding|keeps stopping", timeout=1)
+        if n is None:
+            return
+        print("Dismissing system dialog: " + label(n), flush=True)
+        btn = find(r"^Wait\||^Close app\||^OK\|", timeout=2)
+        if btn is not None:
+            x, y = center(btn)
+            sh(f"input tap {x} {y}")
+        else:
+            sh("input keyevent KEYCODE_BACK")
+        time.sleep(2)
+
+
 def ringing_visible():
     return find(r"I'm awake", timeout=3) is not None
 
@@ -171,10 +185,14 @@ def main():
     sh("settings put system screen_off_timeout 600000")
     sh("input keyevent KEYCODE_WAKEUP")
     sh("wm dismiss-keyguard", check=False)
+    sh("input keyevent 82")
+    time.sleep(2)
+    clear_system_dialogs()
 
     # 1. Empty list
     sh(f"am start -W -n {PKG}/.MainActivity")
-    time.sleep(3)
+    time.sleep(5)
+    clear_system_dialogs()
     record("App launches", find(r"No alarms yet") is not None)
     shot("01-empty-list")
 
@@ -292,6 +310,7 @@ if __name__ == "__main__":
             shot("99-error")
         except Exception:
             pass
-        print(adb("logcat", "-d", "-t", "300", check=False)[-6000:])
+        log = adb("logcat", "-d", check=False).splitlines()
+        print("\n".join(l for l in log if "puzzlealarm" in l or "AndroidRuntime" in l)[-5000:])
         code = 1
     sys.exit(code)
