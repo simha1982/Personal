@@ -303,7 +303,13 @@ def main():
         type_text(key)
         sh("input keyevent KEYCODE_BACK")  # hide keyboard
         tap(r"Try a puzzle")
-        record("AI generates a puzzle in Settings", find(r"^AI puzzle\|", timeout=40) is not None)
+        ai = find(r"^AI puzzle\|", timeout=40)
+        if ai is None and find(r"^Offline puzzle\|", timeout=1):
+            # Same 30 s fallback as on the ringing screen; try once more.
+            print("Provider slow; fell back to an offline puzzle. Trying again.", flush=True)
+            tap(r"Try a puzzle")
+            ai = find(r"^AI puzzle\|", timeout=40)
+        record("AI generates a puzzle in Settings", ai is not None)
         shot("10-settings-ai-puzzle")
         tap(r"Ring a test alarm now")
         time.sleep(3)
