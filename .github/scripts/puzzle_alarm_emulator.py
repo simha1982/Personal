@@ -209,14 +209,6 @@ def main():
     tap(r"Settings")
     record("Settings opens", find(r"API key") is not None)
     # Any one of these secrets works; the app picks the provider from the key's prefix.
-    key = next((os.environ[k] for k in ("ANTHROPIC_API_KEY", "OPENROUTER_API_KEY", "OPENAI_API_KEY") if os.environ.get(k)), "")
-    if key:
-        tap(r"EditText")  # the API key field is the first text field
-        type_text(key)
-        sh("input keyevent KEYCODE_BACK")  # hide keyboard
-        tap(r"Try a puzzle")
-        ok = find(r"^AI puzzle\|", timeout=40) is not None
-        record("AI generates a puzzle", ok)
     shot("04-settings")
     sh("input keyevent KEYCODE_BACK")
     time.sleep(1)
@@ -272,6 +264,8 @@ def main():
         q = current_question()
         if q and solve(q):
             break
+        sh("input keyevent KEYCODE_BACK")  # hide the keyboard so the button is reachable
+        time.sleep(1)
         tap(r"different puzzle")
         time.sleep(2)
     q = current_question()
@@ -292,6 +286,26 @@ def main():
         time.sleep(3)
         record("Correct answer turns the alarm off", not service_running())
         shot("09-after-dismiss")
+
+    # 9. AI puzzles, when a key secret is configured (done last: the script can't solve AI puzzles).
+    key = next((os.environ[k] for k in ("ANTHROPIC_API_KEY", "OPENROUTER_API_KEY", "OPENAI_API_KEY") if os.environ.get(k)), "")
+    if key:
+        sh(f"am start -W -n {PKG}/.MainActivity")
+        time.sleep(2)
+        tap(r"Settings")
+        tap(r"EditText")  # the API key field is the first text field
+        type_text(key)
+        sh("input keyevent KEYCODE_BACK")  # hide keyboard
+        tap(r"Try a puzzle")
+        record("AI generates a puzzle in Settings", find(r"^AI puzzle\|", timeout=40) is not None)
+        shot("10-settings-ai-puzzle")
+        tap(r"Ring a test alarm now")
+        time.sleep(3)
+        tap(r"I'm awake")
+        record("Ringing alarm shows an AI puzzle", find(r"^AI puzzle\|", timeout=40) is not None)
+        shot("11-ringing-ai-puzzle")
+    else:
+        print("No API key secret set: skipping the AI puzzle checks", flush=True)
 
     crashes = adb("logcat", "-d", "-b", "crash", check=False)
     record("No crashes", PKG not in crashes, crashes[-2000:] if PKG in crashes else "")
