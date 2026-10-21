@@ -2,7 +2,7 @@ package com.simha.puzzlealarm
 
 import com.simha.puzzlealarm.data.Difficulty
 import com.simha.puzzlealarm.puzzle.AnswerType
-import com.simha.puzzlealarm.puzzle.ClaudePuzzleProvider
+import com.simha.puzzlealarm.puzzle.PuzzlePrompt
 import com.simha.puzzlealarm.puzzle.OfflinePuzzles
 import com.simha.puzzlealarm.puzzle.Puzzle
 import com.simha.puzzlealarm.puzzle.PuzzleSource
@@ -49,7 +49,7 @@ class PuzzleTest {
             Here you go:
             {"question": "What is 12 x 12 - 4?", "answer": 140, "accepted_answers": [], "answer_type": "number", "hint": "144 first"}
         """.trimIndent()
-        val p = ClaudePuzzleProvider.parse(reply)
+        val p = PuzzlePrompt.parse(reply)
         assertEquals(AnswerType.NUMBER, p.answerType)
         assertEquals(PuzzleSource.AI, p.source)
         assertTrue(p.isCorrect("140"))
@@ -57,6 +57,6 @@ class PuzzleTest {
 
     @Test(expected = Exception::class)
     fun rejectsReplyWithoutJson() {
-        ClaudePuzzleProvider.parse("Sorry, I can't do that.")
+        PuzzlePrompt.parse("Sorry, I can't do that.")
     }
 }

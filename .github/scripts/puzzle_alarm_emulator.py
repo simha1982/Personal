@@ -207,15 +207,16 @@ def main():
 
     # 3. Settings
     tap(r"Settings")
-    record("Settings opens", find(r"Anthropic API key") is not None)
-    key = os.environ.get("ANTHROPIC_API_KEY", "")
+    record("Settings opens", find(r"API key") is not None)
+    # Any one of these secrets works; the app picks the provider from the key's prefix.
+    key = next((os.environ[k] for k in ("ANTHROPIC_API_KEY", "OPENROUTER_API_KEY", "OPENAI_API_KEY") if os.environ.get(k)), "")
     if key:
         tap(r"EditText")  # the API key field is the first text field
         type_text(key)
         sh("input keyevent KEYCODE_BACK")  # hide keyboard
         tap(r"Try a puzzle")
         ok = find(r"^AI puzzle\|", timeout=40) is not None
-        record("Claude generates a puzzle", ok)
+        record("AI generates a puzzle", ok)
     shot("04-settings")
     sh("input keyevent KEYCODE_BACK")
     time.sleep(1)
