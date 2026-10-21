@@ -36,6 +36,11 @@ cd PuzzleAlarm
 ./gradlew testDebugUnitTest
 ```
 
+## Publishing
+
+Google Play setup (signing key, store listing, privacy policy, Play Console declarations, CI
+upload) is in [play/PUBLISHING.md](play/PUBLISHING.md).
+
 ## First run checklist
 
 1. Allow notifications when asked.
