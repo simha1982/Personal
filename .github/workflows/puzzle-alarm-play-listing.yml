@@ -1,0 +1,76 @@
+name: Puzzle Alarm Play listing graphics
+
+# Uploads the store icon, feature graphic and phone screenshots to the Play listing through the
+# Play Developer API, using the PLAY_SERVICE_ACCOUNT_JSON secret. Screenshots come from the
+# emulator test's artifact, trimmed of system bars and padded to Play's 9:16 size.
+
+on:
+  workflow_dispatch:
+    inputs:
+      emulator_run_id:
+        description: "Emulator test run to take screenshots from (empty = latest successful run)"
+        required: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download emulator screenshots
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ inputs.emulator_run_id }}
+        run: |
+          if [ -z "$RUN_ID" ]; then
+            RUN_ID=$(gh run list -R "$GITHUB_REPOSITORY" --workflow puzzle-alarm-emulator.yml \
+              --status success --limit 1 --json databaseId -q '.[0].databaseId')
+          fi
+          echo "Using emulator run $RUN_ID"
+          gh run download "$RUN_ID" -R "$GITHUB_REPOSITORY" -n PuzzleAlarm-emulator-screenshots -D shots
+          ls -l shots
+
+      - name: Make 9:16 phone screenshots
+        run: |
+          pip install --quiet pillow
+          python3 - <<'PY'
+          import os
+          from PIL import Image
+          os.makedirs("phone", exist_ok=True)
+          names = ["03-alarm-list", "02-new-alarm", "05-ringing-first", "07-puzzle",
+                   "11-ringing-ai-puzzle", "10-settings-ai-puzzle"]
+          for i, n in enumerate(names, 1):
+              src = f"shots/{n}.png"
+              if not os.path.exists(src):
+                  print("missing", n)
+                  continue
+              im = Image.open(src).convert("RGB")
+              w, h = im.size
+              im = im.crop((0, h * 4 // 100, w, h - h * 6 // 100))  # drop status and navigation bars
+              bg = im.getpixel((4, im.height // 3))
+              scale = min(1080 / im.width, 1920 / im.height)
+              im = im.resize((round(im.width * scale), round(im.height * scale)), Image.LANCZOS)
+              out = Image.new("RGB", (1080, 1920), bg)
+              out.paste(im, ((1080 - im.width) // 2, (1920 - im.height) // 2))
+              out.save(f"phone/{i:02d}-{n}.png")
+              print("made", n)
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PuzzleAlarm-play-screenshots
+          path: phone/
+
+      - name: Upload graphics to Play
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          pip install --quiet google-api-python-client google-auth
+          python3 .github/scripts/play_listing_graphics.py com.ishtah.puzzlealarm \
+            --icon PuzzleAlarm/play/graphics/icon-512.png \
+            --feature PuzzleAlarm/play/graphics/feature-1024x500.png \
+            --screenshots phone/*.png

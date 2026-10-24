@@ -1,0 +1,105 @@
+name: Puzzle Alarm release
+
+# Builds a signed release bundle (.aab) for Google Play and, when Play API access is set up,
+# uploads it to the internal testing track as a draft. Run it from the Actions tab.
+#
+# Secrets used:
+#   UPLOAD_KEYSTORE_BASE64, UPLOAD_KEYSTORE_PASSWORD, UPLOAD_KEY_ALIAS, UPLOAD_KEY_PASSWORD
+#     Upload key for signing. Without them the bundle is built unsigned (Play rejects unsigned bundles).
+#   PLAY_SERVICE_ACCOUNT_JSON
+#     Service account with release access in Play Console. Without it the upload step is skipped.
+#   APK_REPO_TOKEN
+#     Fine-grained token with "Contents: read and write" on the public download repo
+#     (repo variable APK_REPO, default simha1982/puzzle-alarm-apk). With it and the upload key,
+#     the signed APK is published there as a GitHub release anyone can download.
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "puzzle-alarm-v*"
+  pull_request:  # build only, to catch release-build breakage; never uploads
+    paths:
+      - "PuzzleAlarm/**"
+      - ".github/workflows/puzzle-alarm-release.yml"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Restore upload keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.UPLOAD_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            # Secrets piped in from Windows PowerShell can carry CR/LF; keep only base64 characters.
+            printf %s "$KEYSTORE_B64" | tr -cd 'A-Za-z0-9+/=' | base64 -d > "$RUNNER_TEMP/upload.jks"
+            echo "UPLOAD_KEYSTORE_PATH=$RUNNER_TEMP/upload.jks" >> "$GITHUB_ENV"
+          else
+            echo "::warning::No UPLOAD_KEYSTORE_BASE64 secret; building an unsigned bundle"
+          fi
+      - name: Build release bundle
+        working-directory: PuzzleAlarm
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+          UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.UPLOAD_KEYSTORE_PASSWORD }}
+          UPLOAD_KEY_ALIAS: ${{ secrets.UPLOAD_KEY_ALIAS }}
+          UPLOAD_KEY_PASSWORD: ${{ secrets.UPLOAD_KEY_PASSWORD }}
+        run: |
+          # Drop stray CR/LF or a UTF-8 BOM that Windows tools may add when setting secrets.
+          clean() { printf %s "$1" | sed 's/^\xEF\xBB\xBF//' | tr -d '\r\n'; }
+          export UPLOAD_KEYSTORE_PASSWORD="$(clean "$UPLOAD_KEYSTORE_PASSWORD")"
+          export UPLOAD_KEY_ALIAS="$(clean "$UPLOAD_KEY_ALIAS")"
+          export UPLOAD_KEY_PASSWORD="$(clean "$UPLOAD_KEY_PASSWORD")"
+          ./gradlew --no-daemon bundleRelease assembleRelease
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PuzzleAlarm-release
+          path: |
+            PuzzleAlarm/app/build/outputs/bundle/release/*.aab
+            PuzzleAlarm/app/build/outputs/apk/release/*.apk
+      - name: Check for Play access
+        id: play
+        env:
+          PLAY_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: echo "enabled=$([ -n "$PLAY_JSON" ] && [ -n "$UPLOAD_KEYSTORE_PATH" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+      - name: Upload to Play internal testing (draft)
+        if: steps.play.outputs.enabled == 'true' && github.event_name != 'pull_request'
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.ishtah.puzzlealarm
+          releaseFiles: PuzzleAlarm/app/build/outputs/bundle/release/app-release.aab
+          track: internal
+          status: draft
+      - name: Check for public APK repo access
+        id: apk
+        env:
+          APK_TOKEN: ${{ secrets.APK_REPO_TOKEN }}
+        run: echo "enabled=$([ -n "$APK_TOKEN" ] && [ -n "$UPLOAD_KEYSTORE_PATH" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+      - name: Name the APK
+        if: steps.apk.outputs.enabled == 'true' && github.event_name != 'pull_request'
+        run: cp PuzzleAlarm/app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/PuzzleAlarm.apk"
+      - name: Publish APK to the public download repo
+        if: steps.apk.outputs.enabled == 'true' && github.event_name != 'pull_request'
+        continue-on-error: true  # the Play upload above has already happened; don't fail the release over the mirror
+        uses: softprops/action-gh-release@v2
+        with:
+          repository: ${{ vars.APK_REPO || 'simha1982/puzzle-alarm-apk' }}
+          token: ${{ secrets.APK_REPO_TOKEN }}
+          tag_name: v1.0.${{ github.run_number }}
+          name: Puzzle Alarm 1.0 (build ${{ github.run_number }})
+          make_latest: "true"
+          files: ${{ runner.temp }}/PuzzleAlarm.apk
+          body: |
+            Download **PuzzleAlarm.apk** below and open it on your Android phone (Android 8.0 or newer).
+            Allow "Install unknown apps" for your browser or file manager when asked.
+
+            The newest version is always at
+            https://github.com/${{ vars.APK_REPO || 'simha1982/puzzle-alarm-apk' }}/releases/latest/download/PuzzleAlarm.apk
